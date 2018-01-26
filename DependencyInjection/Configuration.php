@@ -129,6 +129,7 @@ class Configuration implements ConfigurationInterface
                                         ->end()
                                         ->booleanNode('compression')->defaultValue(false)->end()
                                         ->arrayNode('headers')
+                                            ->normalizeKeys(false)
                                             ->useAttributeAsKey('name')
                                             ->prototype('scalar')->end()
                                         ->end()
