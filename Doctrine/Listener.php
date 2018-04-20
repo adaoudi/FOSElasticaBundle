@@ -77,12 +77,14 @@ class Listener
      * @param IndexableInterface       $indexable
      * @param array                    $config
      * @param LoggerInterface          $logger
+     * @param string                   $elasticSearchLogPath
      */
     public function __construct(
         ObjectPersisterInterface $objectPersister,
         IndexableInterface $indexable,
         array $config = array(),
-        LoggerInterface $logger = null
+        LoggerInterface $logger = null,
+        string $elasticSearchLogPath = null
     ) {
         $this->config = array_merge(array(
             'identifier' => 'id',
