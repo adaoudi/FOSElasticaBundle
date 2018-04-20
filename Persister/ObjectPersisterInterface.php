@@ -19,6 +19,8 @@ interface ObjectPersisterInterface
      */
     public function handlesObject($object);
 
+    public function getObjectClass();
+
     /**
      * Insert one object into the type
      * The object will be transformed to an elastica document.

@@ -9,6 +9,8 @@ use FOS\ElasticaBundle\Provider\IndexableInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\PropertyAccess\PropertyAccess;
 use Symfony\Component\PropertyAccess\PropertyAccessorInterface;
+use Monolog\Logger;
+use Monolog\Handler\RotatingFileHandler;
 
 /**
  * Automatically update ElasticSearch based on changes to the Doctrine source
@@ -64,6 +66,11 @@ class Listener
     private $indexable;
 
     /**
+     * @var Logger
+     */
+    protected $logger;
+
+    /**
      * Constructor.
      *
      * @param ObjectPersisterInterface $objectPersister
@@ -83,6 +90,9 @@ class Listener
         $this->indexable = $indexable;
         $this->objectPersister = $objectPersister;
         $this->propertyAccessor = PropertyAccess::createPropertyAccessor();
+
+        $this->logger = new Logger('elasticSearch');
+        $this->logger->pushHandler(new RotatingFileHandler($elasticSearchLogPath, Logger::CRITICAL));
 
         if ($logger && $this->objectPersister instanceof ObjectPersister) {
             $this->objectPersister->setLogger($logger);
@@ -143,17 +153,54 @@ class Listener
      */
     private function persistScheduled()
     {
-        if (count($this->scheduledForInsertion)) {
-            $this->objectPersister->insertMany($this->scheduledForInsertion);
-            $this->scheduledForInsertion = array();
+        try {
+            if (count($this->scheduledForInsertion)) {
+                $this->objectPersister->insertMany($this->scheduledForInsertion);
+                $this->scheduledForInsertion = array();
+            }
+        } catch (\Exception $e) {
+            $this->logExceptionDetails($e, 'Insertion', $this->scheduledForInsertion);
         }
-        if (count($this->scheduledForUpdate)) {
-            $this->objectPersister->replaceMany($this->scheduledForUpdate);
-            $this->scheduledForUpdate = array();
+
+        try {
+            if (count($this->scheduledForUpdate)) {
+                $this->objectPersister->replaceMany($this->scheduledForUpdate);
+                $this->scheduledForUpdate = array();
+            }
+        } catch (\Exception $e) {
+
+            $this->logExceptionDetails($e, 'Updating', $this->scheduledForUpdate);
         }
-        if (count($this->scheduledForDeletion)) {
-            $this->objectPersister->deleteManyByIdentifiers($this->scheduledForDeletion);
-            $this->scheduledForDeletion = array();
+
+        try {
+            if (count($this->scheduledForDeletion)) {
+                $this->objectPersister->deleteManyByIdentifiers($this->scheduledForDeletion);
+                $this->scheduledForDeletion = array();
+            }
+        } catch (\Exception $e) {
+            $this->logExceptionDetails($e, 'Deletion', $this->scheduledForDeletion);
+        }
+    }
+
+    /**
+     * @param \Exception $exception
+     * @param string $action
+     * @param array $scheduledEntities
+     */
+    private function logExceptionDetails(\Exception $exception, string $action, array $scheduledEntities ){
+        $this->logger->error($exception->getMessage());
+        foreach ($scheduledEntities as $entity){
+            $entityName = 'unknown';
+            $entityId = '?';
+            if(is_object($entity) && method_exists($entity, 'getId')){
+                $entityName = $this->objectPersister->getObjectClass();
+                $entityId = $entity->getId();
+            }else if(!is_object($entity) && is_int($entity)) {
+                $entityName = $this->objectPersister->getObjectClass();
+                $entityId = $entity;
+            }
+
+            $this->logger->critical($action.' entity: '.$entityName .' Id: '.$entityId);
         }
     }
 
